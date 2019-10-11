@@ -128,25 +128,35 @@ public class BrokerOuterAPI {
         if (nameServerAddressList != null && nameServerAddressList.size() > 0) {
 
             final RegisterBrokerRequestHeader requestHeader = new RegisterBrokerRequestHeader();
+            // broker地址
             requestHeader.setBrokerAddr(brokerAddr);
+            // brokerId，0为master，大于0为slave
             requestHeader.setBrokerId(brokerId);
+            // broker名称
             requestHeader.setBrokerName(brokerName);
+            // 集群名称
             requestHeader.setClusterName(clusterName);
+            // master地址，初次请求时为空，slave向NameServer注册后返回
             requestHeader.setHaServerAddr(haServerAddr);
+            // 是否进行压缩
             requestHeader.setCompressed(compressed);
 
             RegisterBrokerBody requestBody = new RegisterBrokerBody();
+            // 主题配置
             requestBody.setTopicConfigSerializeWrapper(topicConfigWrapper);
+            // 消息过滤服务器地址
             requestBody.setFilterServerList(filterServerList);
             final byte[] body = requestBody.encode(compressed);
             final int bodyCrc32 = UtilAll.crc32(body);
             requestHeader.setBodyCrc32(bodyCrc32);
             final CountDownLatch countDownLatch = new CountDownLatch(nameServerAddressList.size());
+            // 遍历NameServer列表，Broker消息服务器依次向NameServer发送心跳包
             for (final String namesrvAddr : nameServerAddressList) {
                 brokerOuterExecutor.execute(new Runnable() {
                     @Override
                     public void run() {
                         try {
+                            // 向NameServer服务器发送Broker心跳进行注册
                             RegisterBrokerResult result = registerBroker(namesrvAddr,oneway, timeoutMills,requestHeader,body);
                             if (result != null) {
                                 registerBrokerResultList.add(result);

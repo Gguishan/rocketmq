@@ -25,10 +25,17 @@ import org.apache.rocketmq.client.log.ClientLogger;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.remoting.RPCHook;
 
+/**
+ * 单例模式
+ */
 public class MQClientManager {
     private final static InternalLogger log = ClientLogger.getLog();
     private static MQClientManager instance = new MQClientManager();
     private AtomicInteger factoryIndexGenerator = new AtomicInteger();
+    /**
+     * client缓存表，同一个clientId只会创建一个MQClientInstance实例
+     * clientId = 客户端IP@instance名称（@unitname）
+     */
     private ConcurrentMap<String/* clientId */, MQClientInstance> factoryTable =
         new ConcurrentHashMap<String, MQClientInstance>();
 
@@ -46,11 +53,15 @@ public class MQClientManager {
 
     public MQClientInstance getAndCreateMQClientInstance(final ClientConfig clientConfig, RPCHook rpcHook) {
         String clientId = clientConfig.buildMQClientId();
+        System.err.println("org.apache.rocketmq.client.impl.MQClientManager.getAndCreateMQClientInstance => clientId: " + clientId);
         MQClientInstance instance = this.factoryTable.get(clientId);
+        // 实例已存在，则直接返回，否则新建，并添加到factoryTable中
         if (null == instance) {
+            // 创建并初始化MQClientInstance实例
             instance =
                 new MQClientInstance(clientConfig.cloneClientConfig(),
                     this.factoryIndexGenerator.getAndIncrement(), clientId, rpcHook);
+            // 防止并发条件下，实例重复添加，prev若存在，则表示其他线程已经完成添加，返回已添加完成的实例
             MQClientInstance prev = this.factoryTable.putIfAbsent(clientId, instance);
             if (prev != null) {
                 instance = prev;

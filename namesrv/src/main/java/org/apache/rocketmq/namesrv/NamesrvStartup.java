@@ -137,12 +137,14 @@ public class NamesrvStartup {
             throw new IllegalArgumentException("NamesrvController is null");
         }
 
+        // 初始化服务器，启动心跳检测
         boolean initResult = controller.initialize();
         if (!initResult) {
             controller.shutdown();
             System.exit(-3);
         }
 
+        // 注册jvm关闭钩子函数
         Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
             @Override
             public Void call() throws Exception {
@@ -151,6 +153,7 @@ public class NamesrvStartup {
             }
         }));
 
+        // 启动namesrv服务器
         controller.start();
 
         return controller;

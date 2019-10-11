@@ -243,7 +243,7 @@ public class RemotingCommand {
         }
 
         if (this.extFields != null) {
-
+            System.err.println("org.apache.rocketmq.remoting.protocol.RemotingCommand.decodeCommandCustomHeader: ");
             Field[] fields = getClazzFields(classHeader);
             for (Field field : fields) {
                 if (!Modifier.isStatic(field.getModifiers())) {
@@ -277,6 +277,7 @@ public class RemotingCommand {
                             }
 
                             field.set(objectHeader, valueParsed);
+                            System.err.println(fieldName + " => " + valueParsed);
 
                         } catch (Throwable e) {
                             log.error("Failed field [{}] decoding", fieldName, e);
