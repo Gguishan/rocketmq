@@ -92,7 +92,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
     private final Random random = new Random();
     private final DefaultMQProducer defaultMQProducer;
     /**
-     * 主题推送信息表，存储每个topic对应的推送信息
+     * 主题路由信息表，存储每个topic对应的路由信息
      */
     private final ConcurrentMap<String/* topic */, TopicPublishInfo> topicPublishInfoTable =
         new ConcurrentHashMap<String, TopicPublishInfo>();
@@ -193,7 +193,8 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 // 获取MQ客户端工厂实例，不存在则新建
                 this.mQClientFactory = MQClientManager.getInstance().getAndCreateMQClientInstance(this.defaultMQProducer, rpcHook);
 
-                // 注册生产者，即将当前生产者添加至MQClientInstance.producerTable中
+                // 向MQClientlnstance注册生产者，即将当前生产者添加至MQClientInstance.producerTable中
+                // 方便后续调用网络请求、进行心跳检测
                 boolean registerOK = mQClientFactory.registerProducer(this.defaultMQProducer.getProducerGroup(), this);
                 if (!registerOK) {
                     this.serviceState = ServiceState.CREATE_JUST;
@@ -204,6 +205,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
 
                 this.topicPublishInfoTable.put(this.defaultMQProducer.getCreateTopicKey(), new TopicPublishInfo());
 
+                // 启动MQClientlnstance
                 if (startFactory) {
                     mQClientFactory.start();
                 }
@@ -544,13 +546,16 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         final SendCallback sendCallback,
         final long timeout
     ) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
+        // 确认状态，运行状态时才可发送
         this.makeSureStateOK();
+        // 校验消息主题，消息体长度
         Validators.checkMessage(msg, this.defaultMQProducer);
 
         final long invokeID = random.nextLong();
         long beginTimestampFirst = System.currentTimeMillis();
         long beginTimestampPrev = beginTimestampFirst;
         long endTimestamp = beginTimestampFirst;
+        // 查找Topic路由信息
         TopicPublishInfo topicPublishInfo = this.tryToFindTopicPublishInfo(msg.getTopic());
         if (topicPublishInfo != null && topicPublishInfo.ok()) {
             boolean callTimeout = false;
@@ -687,14 +692,27 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             null).setResponseCode(ClientErrorCode.NOT_FOUND_TOPIC_EXCEPTION);
     }
 
+    /**
+     * 通过指定主题topic查找路由信息
+     * @param topic
+     * @return
+     */
     private TopicPublishInfo tryToFindTopicPublishInfo(final String topic) {
+        /**
+         * 当前主题第一次发送消息时，本地没有topic缓存的路由信息，查询NameServer尝试获取；
+         * 如果从NameServer上位获取到，则再次尝试用默认主题DefaultMQProducerlmpl#createTopicKey去查询
+         * 如果 BrokerConfig#autoCreateTopicEnable = true 时， NameServer 将返回路由信息，如果
+         * autoCreateTopicEnab = false 将抛出无法找到 topic 路由异常
+         */
         TopicPublishInfo topicPublishInfo = this.topicPublishInfoTable.get(topic);
+        // 路由信息不存在或路由消息队列为空，则新建路由信息，并远程向NameServer获取Topic路由信息并更新
         if (null == topicPublishInfo || !topicPublishInfo.ok()) {
             this.topicPublishInfoTable.putIfAbsent(topic, new TopicPublishInfo());
             this.mQClientFactory.updateTopicRouteInfoFromNameServer(topic);
             topicPublishInfo = this.topicPublishInfoTable.get(topic);
         }
 
+        // 路由信息满足条件，直接返回，否则尝试默认主题获取
         if (topicPublishInfo.isHaveTopicRouterInfo() || topicPublishInfo.ok()) {
             return topicPublishInfo;
         } else {
