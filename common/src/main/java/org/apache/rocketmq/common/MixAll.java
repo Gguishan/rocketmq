@@ -126,6 +126,8 @@ public class MixAll {
         if (isChange) {
             String[] ipAndPort = brokerAddr.split(":");
             String brokerAddrNew = ipAndPort[0] + ":" + (Integer.parseInt(ipAndPort[1]) - 2);
+            System.err.println("MixAll#brokerVIPChannel => brokerAddr: " + brokerAddr);
+            System.err.println("MixAll#brokerVIPChannel => brokerAddrNew: " + brokerAddrNew);
             return brokerAddrNew;
         } else {
             return brokerAddr;

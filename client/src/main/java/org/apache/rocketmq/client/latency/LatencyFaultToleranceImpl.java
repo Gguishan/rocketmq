@@ -25,6 +25,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.rocketmq.client.common.ThreadLocalIndex;
 
 public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> {
+    /**
+     * 故障列表
+     * <BrokerName, FaultItem>
+     */
     private final ConcurrentHashMap<String, FaultItem> faultItemTable = new ConcurrentHashMap<String, FaultItem>(16);
 
     private final ThreadLocalIndex whichItemWorst = new ThreadLocalIndex();
@@ -32,6 +36,7 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
     @Override
     public void updateFaultItem(final String name, final long currentLatency, final long notAvailableDuration) {
         FaultItem old = this.faultItemTable.get(name);
+        // 故障列表
         if (null == old) {
             final FaultItem faultItem = new FaultItem(name);
             faultItem.setCurrentLatency(currentLatency);
@@ -64,6 +69,9 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
 
     @Override
     public String pickOneAtLeast() {
+        /**
+         * 尝试从规避的Broker中选择一个可用Broker
+         */
         final Enumeration<FaultItem> elements = this.faultItemTable.elements();
         List<FaultItem> tmpList = new LinkedList<FaultItem>();
         while (elements.hasMoreElements()) {
@@ -72,8 +80,10 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
         }
 
         if (!tmpList.isEmpty()) {
+            // 随机打乱list集合
             Collections.shuffle(tmpList);
 
+            // 按既定规则排序
             Collections.sort(tmpList);
 
             final int half = tmpList.size() / 2;
@@ -96,9 +106,21 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
             '}';
     }
 
+    /**
+     * 故障条目
+     */
     class FaultItem implements Comparable<FaultItem> {
+        /**
+         * BrokerName
+         */
         private final String name;
+        /**
+         * 本次消息发送延迟
+         */
         private volatile long currentLatency;
+        /**
+         * 故障规避开始时间，值为系统时间戳+规避时长，当前时间戳（System.currentTimeMillis()）大于startTimestamp表示可用
+         */
         private volatile long startTimestamp;
 
         public FaultItem(final String name) {

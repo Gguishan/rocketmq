@@ -693,16 +693,16 @@ public class DefaultMQProducerImpl implements MQProducerInner {
     }
 
     /**
-     * 通过指定主题topic查找路由信息
+     * 通过指定主题topic查找topic缓存的路由信息
      * @param topic
      * @return
      */
     private TopicPublishInfo tryToFindTopicPublishInfo(final String topic) {
         /**
          * 当前主题第一次发送消息时，本地没有topic缓存的路由信息，查询NameServer尝试获取；
-         * 如果从NameServer上位获取到，则再次尝试用默认主题DefaultMQProducerlmpl#createTopicKey去查询
+         * 如果从NameServer上未获取到，则再次尝试用默认主题DefaultMQProducerlmpl#createTopicKey去查询
          * 如果 BrokerConfig#autoCreateTopicEnable = true 时， NameServer 将返回路由信息，如果
-         * autoCreateTopicEnab = false 将抛出无法找到 topic 路由异常
+         * autoCreateTopicEnable = false 将抛出无法找到 topic 路由异常
          */
         TopicPublishInfo topicPublishInfo = this.topicPublishInfoTable.get(topic);
         // 路由信息不存在或路由消息队列为空，则新建路由信息，并远程向NameServer获取Topic路由信息并更新
@@ -722,6 +722,15 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         }
     }
 
+    /**
+     * 消息发送
+     * @param msg 待发送消息内容
+     * @param mq 消息队列，将消息发送到此队列上
+     * @param communicationMode 发送模式（同步，异步，单向）
+     * @param sendCallback 异步消息发送回调方法
+     * @param topicPublishInfo 主题路由信息
+     * @param timeout 消息发送超时时间
+     */
     private SendResult sendKernelImpl(final Message msg,
                                       final MessageQueue mq,
                                       final CommunicationMode communicationMode,
@@ -729,7 +738,10 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                                       final TopicPublishInfo topicPublishInfo,
                                       final long timeout) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
         long beginStartTime = System.currentTimeMillis();
+        // 根据brokerName获取主节点Master地址
         String brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
+        // 若未发现，则尝试通过指定主题topic查找路由信息，并更新后再次获取主节点地址
+        // 若仍未发现，则说明broker不存在，抛出异常
         if (null == brokerAddr) {
             tryToFindTopicPublishInfo(mq.getTopic());
             brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
@@ -737,11 +749,14 @@ public class DefaultMQProducerImpl implements MQProducerInner {
 
         SendMessageContext context = null;
         if (brokerAddr != null) {
+            // VIP通道开启，则对修改地址端口（端口号-2）
             brokerAddr = MixAll.brokerVIPChannel(this.defaultMQProducer.isSendMessageWithVIPChannel(), brokerAddr);
 
             byte[] prevBody = msg.getBody();
             try {
                 //for MessageBatch,ID has been set in the generating process
+                // 批量消息，唯一Id已经设置
+                // 设置全局唯一Id
                 if (!(msg instanceof MessageBatch)) {
                     MessageClientIDSetter.setUniqID(msg);
                 }

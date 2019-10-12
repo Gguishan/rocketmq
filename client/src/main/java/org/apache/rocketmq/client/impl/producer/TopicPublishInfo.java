@@ -75,16 +75,26 @@ public class TopicPublishInfo {
         this.haveTopicRouterInfo = haveTopicRouterInfo;
     }
 
+    /**
+     * 发送一次消息
+     * @param lastBrokerName 上次选择发送消息失败的broker名称
+     * @return
+     */
     public MessageQueue selectOneMessageQueue(final String lastBrokerName) {
         if (lastBrokerName == null) {
             return selectOneMessageQueue();
         } else {
+            /**
+             * 循环遍历所有消息队列，若其中存在消息队列所在的broker不是上次发送失败的broker，则直接返回消息队列，否则继续循环执行
+             * 若所有的消息队列都不满足条件，则直接调用selectOneMessageQueue方法
+             */
             int index = this.sendWhichQueue.getAndIncrement();
             for (int i = 0; i < this.messageQueueList.size(); i++) {
                 int pos = Math.abs(index++) % this.messageQueueList.size();
                 if (pos < 0)
                     pos = 0;
                 MessageQueue mq = this.messageQueueList.get(pos);
+                // 规避上次发送失败的broker，防止再次失败的可能
                 if (!mq.getBrokerName().equals(lastBrokerName)) {
                     return mq;
                 }
@@ -93,6 +103,10 @@ public class TopicPublishInfo {
         }
     }
 
+    /**
+     * 自增取模获取消息队列列表下标，获取消息队列
+     * @return
+     */
     public MessageQueue selectOneMessageQueue() {
         int index = this.sendWhichQueue.getAndIncrement();
         int pos = Math.abs(index) % this.messageQueueList.size();

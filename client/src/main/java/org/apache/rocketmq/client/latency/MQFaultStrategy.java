@@ -26,6 +26,9 @@ public class MQFaultStrategy {
     private final static InternalLogger log = ClientLogger.getLog();
     private final LatencyFaultTolerance<String> latencyFaultTolerance = new LatencyFaultToleranceImpl();
 
+    /**
+     * 是否启用Broker故障延迟机制
+     */
     private boolean sendLatencyFaultEnable = false;
 
     private long[] latencyMax = {50L, 100L, 550L, 1000L, 2000L, 3000L, 15000L};
@@ -56,6 +59,7 @@ public class MQFaultStrategy {
     }
 
     public MessageQueue selectOneMessageQueue(final TopicPublishInfo tpInfo, final String lastBrokerName) {
+        // 启用Broker故障延迟机制
         if (this.sendLatencyFaultEnable) {
             try {
                 int index = tpInfo.getSendWhichQueue().getAndIncrement();
@@ -64,12 +68,15 @@ public class MQFaultStrategy {
                     if (pos < 0)
                         pos = 0;
                     MessageQueue mq = tpInfo.getMessageQueueList().get(pos);
+                    // 判断mq队列对应的Broker是否可用
                     if (latencyFaultTolerance.isAvailable(mq.getBrokerName())) {
+                        // 不存在失败的Broker或当前队列对应的Broker与上次失败的相同，说明Broker已经恢复，当前队列可用，可直接返回当前队列
                         if (null == lastBrokerName || mq.getBrokerName().equals(lastBrokerName))
                             return mq;
                     }
                 }
 
+                // 尝试从规避的Broker中选择一个可用Broker
                 final String notBestBroker = latencyFaultTolerance.pickOneAtLeast();
                 int writeQueueNums = tpInfo.getQueueIdByBroker(notBestBroker);
                 if (writeQueueNums > 0) {
@@ -89,9 +96,17 @@ public class MQFaultStrategy {
             return tpInfo.selectOneMessageQueue();
         }
 
+        // 不启用Broker故障延迟机制
         return tpInfo.selectOneMessageQueue(lastBrokerName);
     }
 
+    /**
+     * 更新故障条目信息
+     * @param brokerName
+     * @param currentLatency 本次消息发送延迟时间
+     * @param isolation 是否隔离，如果为 true ，则使用默认时长30s来计算Broker的障规避时长
+     *                  如果为 false 则使用本次消息发送延迟时间来计算Broker的规避时长
+     */
     public void updateFaultItem(final String brokerName, final long currentLatency, boolean isolation) {
         if (this.sendLatencyFaultEnable) {
             long duration = computeNotAvailableDuration(isolation ? 30000 : currentLatency);
@@ -99,6 +114,12 @@ public class MQFaultStrategy {
         }
     }
 
+    /**
+     * 获取因本次消息发送故障需要将Broker规避的时长，这个时间段该Broker将不参与负载
+     * 从latencyMax数组尾部开始，获取第一个小于或等于currentLatency的时长，若latencyMax中不存在，则取0
+     * @param currentLatency
+     * @return
+     */
     private long computeNotAvailableDuration(final long currentLatency) {
         for (int i = latencyMax.length - 1; i >= 0; i--) {
             if (currentLatency >= latencyMax[i])
