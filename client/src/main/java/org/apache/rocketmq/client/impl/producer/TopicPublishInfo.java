@@ -76,7 +76,7 @@ public class TopicPublishInfo {
     }
 
     /**
-     * 发送一次消息
+     * 选择一个消息队列，用于发送消息
      * @param lastBrokerName 上次选择发送消息失败的broker名称
      * @return
      */
