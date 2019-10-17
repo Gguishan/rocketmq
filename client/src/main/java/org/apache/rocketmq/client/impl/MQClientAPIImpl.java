@@ -403,6 +403,9 @@ public class MQClientAPIImpl {
         return sendMessage(addr, brokerName, msg, requestHeader, timeoutMillis, communicationMode, null, null, null, 0, context, producer);
     }
 
+    /**
+     * 消息发送
+     */
     public SendResult sendMessage(
         final String addr,
         final String brokerName,
@@ -419,6 +422,7 @@ public class MQClientAPIImpl {
     ) throws RemotingException, MQBrokerException, InterruptedException {
         long beginStartTime = System.currentTimeMillis();
         RemotingCommand request = null;
+        // 创建远程网络传输请求
         if (sendSmartMsg || msg instanceof MessageBatch) {
             SendMessageRequestHeaderV2 requestHeaderV2 = SendMessageRequestHeaderV2.createSendMessageRequestHeaderV2(requestHeader);
             request = RemotingCommand.createRequestCommand(msg instanceof MessageBatch ? RequestCode.SEND_BATCH_MESSAGE : RequestCode.SEND_MESSAGE_V2, requestHeaderV2);
@@ -428,6 +432,9 @@ public class MQClientAPIImpl {
 
         request.setBody(msg.getBody());
 
+        /**
+         * 根据消息发送模式，进行网络传输
+         */
         switch (communicationMode) {
             case ONEWAY:
                 this.remotingClient.invokeOneway(addr, request, timeoutMillis);
@@ -455,6 +462,9 @@ public class MQClientAPIImpl {
         return null;
     }
 
+    /**
+     * 同步发送消息
+     */
     private SendResult sendMessageSync(
         final String addr,
         final String brokerName,
@@ -462,11 +472,15 @@ public class MQClientAPIImpl {
         final long timeoutMillis,
         final RemotingCommand request
     ) throws RemotingException, MQBrokerException, InterruptedException {
+        // 调用同步发送方法
         RemotingCommand response = this.remotingClient.invokeSync(addr, request, timeoutMillis);
         assert response != null;
         return this.processSendResponse(brokerName, msg, response);
     }
 
+    /**
+     * 异步发送消息
+     */
     private void sendMessageAsync(
         final String addr,
         final String brokerName,

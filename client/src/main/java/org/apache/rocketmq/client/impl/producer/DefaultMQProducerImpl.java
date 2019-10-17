@@ -774,8 +774,9 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     topicWithNamespace = true;
                 }
 
-                // 消息压缩，消息体默认超过4k，会对消息体进行zip压缩，并设置消息的系统标记为MessageSysFlag.COMPRESSED_FLAG
+                // 消息系统标记
                 int sysFlag = 0;
+                // 消息压缩，消息体默认超过4k，会对消息体进行zip压缩，并设置消息的系统标记为MessageSysFlag.COMPRESSED_FLAG
                 boolean msgBodyCompressed = false;
                 if (this.tryToCompressMessage(msg)) {
                     sysFlag |= MessageSysFlag.COMPRESSED_FLAG;
@@ -788,18 +789,25 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     sysFlag |= MessageSysFlag.TRANSACTION_PREPARED_TYPE;
                 }
 
+                // 如果注册了禁用检查钩子函数，
                 if (hasCheckForbiddenHook()) {
                     CheckForbiddenContext checkForbiddenContext = new CheckForbiddenContext();
+                    // NameServer服务地址
                     checkForbiddenContext.setNameSrvAddr(this.defaultMQProducer.getNamesrvAddr());
+                    // 生产者组
                     checkForbiddenContext.setGroup(this.defaultMQProducer.getProducerGroup());
+                    // 消息发送模式：单向/同步/异步
                     checkForbiddenContext.setCommunicationMode(communicationMode);
+                    // Broker地址
                     checkForbiddenContext.setBrokerAddr(brokerAddr);
+                    // 消息体
                     checkForbiddenContext.setMessage(msg);
+                    // 消息队列
                     checkForbiddenContext.setMq(mq);
                     checkForbiddenContext.setUnitMode(this.isUnitMode());
                     this.executeCheckForbiddenHook(checkForbiddenContext);
                 }
-
+                // 如果注册了消息发送钩子函数，则执行消息发送之前的增强逻辑
                 if (this.hasSendMessageHook()) {
                     context = new SendMessageContext();
                     context.setProducer(this);
@@ -821,18 +829,32 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     this.executeSendMessageHookBefore(context);
                 }
 
+                /**
+                 * 构建消息发送请求包
+                 */
                 SendMessageRequestHeader requestHeader = new SendMessageRequestHeader();
+                // 生产者组
                 requestHeader.setProducerGroup(this.defaultMQProducer.getProducerGroup());
+                // 消息主题
                 requestHeader.setTopic(msg.getTopic());
+                // 默认创建的消息主题
                 requestHeader.setDefaultTopic(this.defaultMQProducer.getCreateTopicKey());
+                // 消息队列新建时默认的消息队列数量，默认为4
                 requestHeader.setDefaultTopicQueueNums(this.defaultMQProducer.getDefaultTopicQueueNums());
+                // 消息队列ID（序号）
                 requestHeader.setQueueId(mq.getQueueId());
+                // 消息系统标志
                 requestHeader.setSysFlag(sysFlag);
+                // 消息发送时间
                 requestHeader.setBornTimestamp(System.currentTimeMillis());
+                // 消息标志
                 requestHeader.setFlag(msg.getFlag());
+                // 消息扩展属性
                 requestHeader.setProperties(MessageDecoder.messageProperties2String(msg.getProperties()));
+                // 消息重试次数
                 requestHeader.setReconsumeTimes(0);
                 requestHeader.setUnitMode(this.isUnitMode());
+                // 是否是批量消息
                 requestHeader.setBatch(msg instanceof MessageBatch);
                 if (requestHeader.getTopic().startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)) {
                     String reconsumeTimes = MessageAccessor.getReconsumeTime(msg);
@@ -850,13 +872,20 @@ public class DefaultMQProducerImpl implements MQProducerInner {
 
                 SendResult sendResult = null;
                 switch (communicationMode) {
+                    // 异步
                     case ASYNC:
                         Message tmpMessage = msg;
                         boolean messageCloned = false;
+                        // 消息体已经被压缩了，表示消息发送失败，正进行重试，为防止重复压缩（压缩后的消息体依然大于压缩限制，默认4k），将消息体重置
                         if (msgBodyCompressed) {
                             //If msg body was compressed, msgbody should be reset using prevBody.
                             //Clone new message using commpressed message body and recover origin massage.
+                            //如果消息体已经被压缩，消息体需要用prevBody重置
+                            //用压缩过的消息体clone新的消息并恢复源消息
                             //Fix bug:https://github.com/apache/rocketmq-externals/issues/66
+                            // 原因：tryToCompressMessage函数没有判断msg是否被压缩过，只判断了是否过大，
+                            // 如果压缩后发送失败进行重发并且body大小仍然>=getCompressMsgBodyOverHowmuch()， body会被压缩两次
+                            // 压缩后的消息体克隆
                             tmpMessage = MessageAccessor.cloneMessage(msg);
                             messageCloned = true;
                             msg.setBody(prevBody);
@@ -879,7 +908,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                             mq.getBrokerName(),
                             tmpMessage,
                             requestHeader,
-                            timeout - costTimeAsync,
+                            timeout - costTimeAsync, // 超时时间
                             communicationMode,
                             sendCallback,
                             topicPublishInfo,
@@ -888,7 +917,9 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                             context,
                             this);
                         break;
+                    // 单向
                     case ONEWAY:
+                    // 同步
                     case SYNC:
                         long costTimeSync = System.currentTimeMillis() - beginStartTime;
                         if (timeout < costTimeSync) {
