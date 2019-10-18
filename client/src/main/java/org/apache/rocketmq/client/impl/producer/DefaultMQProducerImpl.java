@@ -940,6 +940,8 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                         break;
                 }
 
+                // 若注册了消息发送钩子函数，执行发送后逻辑
+                // 消息发送过程中发生RemotingException、MQBrokerException、InterruptedException异常时，方法也会执行
                 if (this.hasSendMessageHook()) {
                     context.setSendResult(sendResult);
                     this.executeSendMessageHookAfter(context);

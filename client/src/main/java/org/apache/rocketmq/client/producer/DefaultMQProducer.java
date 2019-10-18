@@ -851,13 +851,22 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
         this.defaultMQProducerImpl.setAsyncSenderExecutor(asyncSenderExecutor);
     }
 
+    /**
+     * 将消息集合封装，用于批量消息发送
+     * @param msgs
+     * @return
+     * @throws MQClientException
+     */
     private MessageBatch batch(Collection<Message> msgs) throws MQClientException {
         MessageBatch msgBatch;
         try {
             msgBatch = MessageBatch.generateFromList(msgs);
             for (Message message : msgBatch) {
+                // 校验消息
                 Validators.checkMessage(message, this);
+                // 分别对每个消息设置唯一Id标志
                 MessageClientIDSetter.setUniqID(message);
+                // 设置主题命名空间
                 message.setTopic(withNamespace(message.getTopic()));
             }
             msgBatch.setBody(msgBatch.encode());

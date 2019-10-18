@@ -20,14 +20,41 @@ import org.apache.rocketmq.common.constant.PermName;
 
 public class TopicConfig {
     private static final String SEPARATOR = " ";
+    /**
+     * 默认读队列数量
+     */
     public static int defaultReadQueueNums = 16;
+    /**
+     * 默认写队列数量
+     */
     public static int defaultWriteQueueNums = 16;
+    /**
+     * 主题名称
+     */
     private String topicName;
+    /**
+     * 读队列数量
+     */
     private int readQueueNums = defaultReadQueueNums;
+    /**
+     * 写队列数量
+     */
     private int writeQueueNums = defaultWriteQueueNums;
+    /**
+     * 权限码
+     */
     private int perm = PermName.PERM_READ | PermName.PERM_WRITE;
+    /**
+     * 主题过滤方式，支持SINGLE_TAG，MULTI_TAG
+     */
     private TopicFilterType topicFilterType = TopicFilterType.SINGLE_TAG;
+    /**
+     * 主题系统标记
+     */
     private int topicSysFlag = 0;
+    /**
+     * 是否为顺序消息
+     */
     private boolean order = false;
 
     public TopicConfig() {
