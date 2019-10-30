@@ -22,33 +22,60 @@ import org.apache.rocketmq.store.ConsumeQueue;
 
 public class MessageStoreConfig {
     //The root directory in which the log data is kept
+    /**
+     * 消息存储日志根目录：当前用户主目录的store目录下
+     */
     @ImportantField
     private String storePathRootDir = System.getProperty("user.home") + File.separator + "store";
 
     //The directory in which the commitlog is kept
+    /**
+     * 消息存储日志文件
+     */
     @ImportantField
     private String storePathCommitLog = System.getProperty("user.home") + File.separator + "store"
         + File.separator + "commitlog";
 
     // CommitLog file size,default is 1G
+    /**
+     * CommitLog日志文件大小，默认1GB
+     */
     private int mappedFileSizeCommitLog = 1024 * 1024 * 1024;
     // ConsumeQueue file size,default is 30W
+    /**
+     * 消费者队列文件大小，默认为30MB
+     */
     private int mappedFileSizeConsumeQueue = 300000 * ConsumeQueue.CQ_STORE_UNIT_SIZE;
     // enable consume queue ext
+    /**
+     * 是否启动消费者队列扩展
+     */
     private boolean enableConsumeQueueExt = false;
     // ConsumeQueue extend file size, 48M
+    /**
+     * 消费者扩展文件大小，默认48MB
+     */
     private int mappedFileSizeConsumeQueueExt = 48 * 1024 * 1024;
     // Bit count of filter bit map.
     // this will be set by pipe of calculate filter bit map.
+    /**
+     * 字节
+     */
     private int bitMapLengthConsumeQueueExt = 64;
 
     // CommitLog flush interval
     // flush data to disk
+    /**
+     * 刷新CommitLog文件数据到磁盘的时间间隔
+     */
     @ImportantField
     private int flushIntervalCommitLog = 500;
 
     // Only used if TransientStorePool enabled
     // flush data to FileChannel
+    /**
+     * 提交时间间隔
+     */
     @ImportantField
     private int commitIntervalCommitLog = 200;
 

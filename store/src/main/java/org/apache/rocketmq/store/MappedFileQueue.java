@@ -35,17 +35,38 @@ public class MappedFileQueue {
 
     private static final int DELETE_FILES_BATCH_MAX = 10;
 
+    /**
+     * 存储目录
+     */
     private final String storePath;
 
+    /**
+     * 单个mappedFile文件的存储大小
+     */
     private final int mappedFileSize;
 
+    /**
+     * MappedFile文件集合
+     */
     private final CopyOnWriteArrayList<MappedFile> mappedFiles = new CopyOnWriteArrayList<MappedFile>();
 
+    /**
+     * 创建Mapped File文件服务类
+     */
     private final AllocateMappedFileService allocateMappedFileService;
 
+    /**
+     * 当前刷盘指针，表示该指针之前的所有数据全部持久化到磁盘
+     */
     private long flushedWhere = 0;
+    /**
+     * 当前数据提交指针，内存中ByteBuff当前的写指针，大于等于flushedWhere，需要先将消息写入内存，才可以刷盘
+     */
     private long committedWhere = 0;
 
+    /**
+     * 消息存储时间
+     */
     private volatile long storeTimestamp = 0;
 
     public MappedFileQueue(final String storePath, int mappedFileSize,
@@ -74,12 +95,21 @@ public class MappedFileQueue {
         }
     }
 
+    /**
+     * 根据存储时间戳查找MappedFile
+     * @param timestamp
+     * @return
+     */
     public MappedFile getMappedFileByTime(final long timestamp) {
+        // 获取MappedFile列表克隆
         Object[] mfs = this.copyMappedFiles(0);
 
         if (null == mfs)
             return null;
 
+        /**
+         * 从MappedFile列表中第一个文件开始查找，找到第一个最后更新时间大于带查找时间戳的文件，有则返回，不存在，则返回最后一个
+         */
         for (int i = 0; i < mfs.length; i++) {
             MappedFile mappedFile = (MappedFile) mfs[i];
             if (mappedFile.getLastModifiedTimestamp() >= timestamp) {
@@ -90,6 +120,9 @@ public class MappedFileQueue {
         return (MappedFile) mfs[mfs.length - 1];
     }
 
+    /**
+     *  获取MappedFile列表克隆
+     */
     private Object[] copyMappedFiles(final int reservedMappedFiles) {
         Object[] mfs;
 
@@ -454,6 +487,7 @@ public class MappedFileQueue {
 
     /**
      * Finds a mapped file by offset.
+     * 根据偏移量查找MappedFile
      *
      * @param offset Offset.
      * @param returnFirstOnNotFound If the mapped file is not found, then return the first one.
@@ -464,6 +498,7 @@ public class MappedFileQueue {
             MappedFile firstMappedFile = this.getFirstMappedFile();
             MappedFile lastMappedFile = this.getLastMappedFile();
             if (firstMappedFile != null && lastMappedFile != null) {
+                // 判断offset是否超出
                 if (offset < firstMappedFile.getFileFromOffset() || offset >= lastMappedFile.getFileFromOffset() + this.mappedFileSize) {
                     LOG_ERROR.warn("Offset not matched. Request offset: {}, firstOffset: {}, lastOffset: {}, mappedFileSize: {}, mappedFiles count: {}",
                         offset,
@@ -472,6 +507,7 @@ public class MappedFileQueue {
                         this.mappedFileSize,
                         this.mappedFiles.size());
                 } else {
+                    // 确定offset对应的MappedFile的列表下标
                     int index = (int) ((offset / this.mappedFileSize) - (firstMappedFile.getFileFromOffset() / this.mappedFileSize));
                     MappedFile targetFile = null;
                     try {
@@ -479,11 +515,14 @@ public class MappedFileQueue {
                     } catch (Exception ignored) {
                     }
 
+                    // 获取到的文件下满足条件，则直接返回
                     if (targetFile != null && offset >= targetFile.getFileFromOffset()
                         && offset < targetFile.getFileFromOffset() + this.mappedFileSize) {
                         return targetFile;
                     }
 
+                    // 循环遍历集合，获取满足条件的MappedFile返回
+                    // 因为RocketMQ采用定时删除策略，会定期删除内存中的MappedFile，所以通过index获取到的可能出错
                     for (MappedFile tmpMappedFile : this.mappedFiles) {
                         if (offset >= tmpMappedFile.getFileFromOffset()
                             && offset < tmpMappedFile.getFileFromOffset() + this.mappedFileSize) {
@@ -492,6 +531,7 @@ public class MappedFileQueue {
                     }
                 }
 
+                // 未发现，且returnFirstOnNotFound=true时
                 if (returnFirstOnNotFound) {
                     return firstMappedFile;
                 }
